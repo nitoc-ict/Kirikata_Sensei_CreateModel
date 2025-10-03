@@ -23,3 +23,7 @@ pip install -r requirements.txt
 # detect.py
 
 mediapipe hands と yolo を用いて、実際のモデルの精度の検証のためのデモアプリ
+
+# detect_with_comments.py
+
+detect.pyを少し詳しく説明した。
