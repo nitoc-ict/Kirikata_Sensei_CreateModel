@@ -1,0 +1,11 @@
+venv
+.git
+.env
+__pycache__/
+public/*
+output/*
+annotation/*
+dataset/
+knife_detection/
+runs/
+/yolo11s.pt

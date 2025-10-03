@@ -1,0 +1,7 @@
+# data_knife.yamlの例
+
+train: /content/drive/MyDrive/procon/procon2025/model/data2/train/images # 学習用画像ディレクトリの絶対パスまたは相対パス
+val: /content/drive/MyDrive/procon/procon2025/model/data2/val/images # 検証用画像ディレクトリの絶対パスまたは相対パス
+
+nc: 1 # クラス数（包丁だけなら1）
+names: ["knife"] # クラス名のリスト（ラベルの0に対応）
