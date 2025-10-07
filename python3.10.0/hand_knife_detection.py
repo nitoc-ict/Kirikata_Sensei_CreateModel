@@ -4,7 +4,7 @@ import numpy as np
 from ultralytics import YOLO  # YOLOv8 Python版
 
 # 学習済みYOLOモデルの読み込み（パスは適宜変更）
-yolo_model = YOLO('../model/knife.pt')
+yolo_model = YOLO('./best.pt')
 
 # MediaPipe Hands初期化
 mp_hands = mp.solutions.hands
@@ -25,13 +25,6 @@ while cap.isOpened():
 
     # YOLOで包丁推論
     yolo_results = yolo_model(frame)[0]  # 推論結果の1つ目
-    
-    # 包丁クラスのIDは環境により異なるので要調整、例としてclass 0が包丁
-    # knife_boxes = []
-    # for box, cls in zip(yolo_results.boxes.xyxy, yolo_results.boxes.cls):
-    #     if int(cls) == 0:  # クラスIDが0の物体を包丁と仮定
-    #         xmin, ymin, xmax, ymax = map(int, box)
-    #         knife_boxes.append([xmin, ymin, xmax, ymax])
 
     # 包丁ボックスとスコアのペアを作る
     knife_boxes_scores = []

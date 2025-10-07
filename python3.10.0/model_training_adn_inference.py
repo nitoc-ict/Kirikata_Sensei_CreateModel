@@ -6,7 +6,7 @@ if __name__ == "__main__":
 
     # Google Colab向け設定例
     results = model.train(
-        data='/content/drive/MyDrive/procon/procon2025/model/data2_knife.yaml',  # Colab上のファイルパスに注意
+        data='/content/drive/MyDrive/procon/procon2025/model/data_knife.yaml',  # Colab上のファイルパス
         epochs=30,               # 適切な学習エポック数
         imgsz=640,               # 画像サイズ
         batch=8,                 # ColabのGPUメモリに合わせて調整
