@@ -9,4 +9,3 @@ dataset/
 knife_detection/
 runs/
 /yolo11s.pt
-model/

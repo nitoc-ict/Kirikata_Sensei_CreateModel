@@ -1,0 +1,1 @@
+openvino_gpu10.py が現状もっと適している

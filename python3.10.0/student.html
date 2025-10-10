@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>生徒用 - 調理実習サポート</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(
+          135deg,
+          #1a1b2e 0%,
+          #16213e 50%,
+          #0f0e23 100%
+        );
+        color: #ffffff;
+        min-height: 100vh;
+        padding: 20px;
+        display: none;
+      }
+
+      body.loaded {
+        display: block;
+      }
+
+      .container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        padding: 40px;
+        width: 100%;
+        max-width: 600px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 12px;
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        padding: 15px 30px;
+        width: 100%;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        color: #ffffff;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        padding: 12px 20px;
+        width: 100%;
+        margin-top: 10px;
+      }
+
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .btn-danger {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        border: none;
+        border-radius: 12px;
+        color: #ffffff;
+        font-size: 1.2rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        padding: 20px;
+        width: 100%;
+        margin: 20px 0;
+        animation: dangerPulse 2s infinite;
+      }
+
+      @keyframes dangerPulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.02);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .btn-danger:hover {
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 25px rgba(239, 68, 68, 0.6);
+      }
+
+      .btn-step {
+        background: rgba(16, 185, 129, 0.1);
+        border: 2px solid rgba(16, 185, 129, 0.3);
+        border-radius: 12px;
+        color: #10b981;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        padding: 15px 25px;
+        margin: 10px;
+      }
+
+      .btn-step:hover {
+        background: rgba(16, 185, 129, 0.2);
+        transform: translateY(-2px);
+      }
+
+      .btn-step:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 15px 20px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        color: #ffffff;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        margin-bottom: 20px;
+      }
+
+      .form-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .form-input::placeholder {
+        color: #6b7280;
+      }
+
+      .form-label {
+        display: block;
+        margin-bottom: 8px;
+        color: #a0a4b8;
+        font-weight: 500;
+      }
+
+      .title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-align: center;
+      }
+
+      .subtitle {
+        color: #a0a4b8;
+        font-size: 1rem;
+        text-align: center;
+        margin-bottom: 40px;
+      }
+
+      /* 座席選択 */
+      .seat-selection {
+        margin-bottom: 20px;
+      }
+
+      .seat-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 15px;
+        justify-content: center;
+      }
+
+      .seat-button {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        color: #ffffff;
+        padding: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.9rem;
+        min-height: 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .seat-button:hover:not(.occupied) {
+        background: rgba(102, 126, 234, 0.2);
+        border-color: #667eea;
+        transform: translateY(-2px);
+      }
+
+      .seat-button.selected {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-color: #667eea;
+        transform: scale(1.05);
+      }
+
+      .seat-button.occupied {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.5);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .seat-number {
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+
+      .seat-status {
+        font-size: 0.8rem;
+        opacity: 0.8;
+      }
+
+      /* グリッドレイアウト */
+      .grid-1 {
+        grid-template-columns: 1fr;
+      }
+      .grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .grid-5 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .grid-6 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .grid-7 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .grid-8 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .grid-9 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .grid-10 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      /* 参加画面 */
+      .join-screen {
+        display: block;
+      }
+
+      /* レシピ表示画面 */
+      .recipe-screen {
+        display: none;
+      }
+
+      .recipe-container {
+        max-width: 800px;
+      }
+
+      .recipe-header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .room-info {
+        background: rgba(102, 126, 234, 0.1);
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      .room-name {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: #667eea;
+      }
+
+      .welcome-message {
+        color: #a0a4b8;
+        font-size: 1rem;
+      }
+
+      .seat-info {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 10px;
+        color: #10b981;
+        font-size: 0.9rem;
+      }
+
+      /* レシピステップ */
+      .recipe-content {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 30px;
+        margin-bottom: 30px;
+      }
+
+      .recipe-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        text-align: center;
+        color: #667eea;
+      }
+
+      .step-display {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 25px;
+      }
+
+      .step-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .step-number {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.2rem;
+      }
+
+      .step-info {
+        text-align: right;
+        color: #a0a4b8;
+        font-size: 0.9rem;
+      }
+
+      .step-title {
+        font-size: 1.4rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+        color: #ffffff;
+      }
+
+      .step-description {
+        font-size: 1.1rem;
+        line-height: 1.6;
+        margin-bottom: 20px;
+        color: #e5e7eb;
+      }
+
+      .step-tips {
+        background: rgba(16, 185, 129, 0.1);
+        border-left: 4px solid #10b981;
+        border-radius: 0 8px 8px 0;
+        padding: 15px;
+        margin-bottom: 10px;
+      }
+
+      .step-warnings {
+        background: rgba(239, 68, 68, 0.1);
+        border-left: 4px solid #ef4444;
+        border-radius: 0 8px 8px 0;
+        padding: 15px;
+        margin-bottom: 10px;
+      }
+
+      .step-tips-title,
+      .step-warnings-title {
+        font-weight: 600;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .step-tips-title {
+        color: #10b981;
+      }
+
+      .step-warnings-title {
+        color: #ef4444;
+      }
+
+      .step-tips ul,
+      .step-warnings ul {
+        margin-left: 20px;
+      }
+
+      .step-tips li,
+      .step-warnings li {
+        margin-bottom: 5px;
+      }
+
+      /* 進捗表示 */
+      .progress-display {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 25px;
+        text-align: center;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 12px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        overflow: hidden;
+        margin: 15px 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #059669);
+        transition: width 0.3s ease;
+        border-radius: 6px;
+      }
+
+      .progress-text {
+        color: #10b981;
+        font-weight: 600;
+        font-size: 1.1rem;
+      }
+
+      /* ステップナビゲーション */
+      .step-navigation {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+
+      /* 接続状態 */
+      .connection-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        padding: 10px;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 8px;
+      }
+
+      .connection-status.disconnected {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+        margin-right: 8px;
+      }
+
+      .status-dot.disconnected {
+        background: #ef4444;
+      }
+
+      .status-text {
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+
+      /* 待機画面 */
+      .waiting-screen {
+        text-align: center;
+        color: #a0a4b8;
+        padding: 40px;
+      }
+
+      .waiting-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+      }
+
+      .waiting-description {
+        margin-bottom: 30px;
+        line-height: 1.6;
+      }
+
+      /* エラーメッセージ */
+      .error-message {
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        color: #f87171;
+        font-size: 0.875rem;
+        display: none;
+      }
+
+      .error-message.show {
+        display: block;
+        animation: fadeIn 0.3s ease;
+      }
+
+      /* ローディング画面 */
+      .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          135deg,
+          #1a1b2e 0%,
+          #16213e 50%,
+          #0f0e23 100%
+        );
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+
+      .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      /* アニメーション */
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* モバイル対応 */
+      @media (max-width: 768px) {
+        .title {
+          font-size: 2rem;
+        }
+
+        .card {
+          padding: 20px;
+          margin: 10px;
+        }
+
+        body {
+          padding: 10px;
+        }
+
+        .seat-grid {
+          grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)) !important;
+        }
+
+        .step-navigation {
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .recipe-content {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loadingScreen" class="loading-screen">
+      <div class="loading-spinner"></div>
+    </div>
+
+    <!-- 参加画面 -->
+    <div id="joinScreen" class="container join-screen">
+      <div class="card">
+        <h1 class="title">調理実習参加</h1>
+        <p class="subtitle">授業に参加するための情報を入力してください</p>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="joinForm">
+          <label class="form-label">ルーム名</label>
+          <input
+            type="text"
+            id="roomName"
+            class="form-input"
+            placeholder="ルーム名を入力してください"
+            required
+          />
+
+          <div class="seat-selection">
+            <label class="form-label">座席を選択してください</label>
+            <div id="seatGrid" class="seat-grid grid-1">
+              <!-- 座席ボタンがここに動的に生成される -->
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" id="joinButton" disabled>
+            参加する
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- レシピ表示画面 -->
+    <div id="recipeScreen" class="container recipe-screen">
+      <div class="card recipe-container">
+        <div class="recipe-header">
+          <div class="room-info">
+            <div class="room-name" id="recipeRoomName"></div>
+            <div class="welcome-message">
+              こんにちは、<span id="recipeStudentName"></span>さん
+            </div>
+            <div class="seat-info" id="seatInfo">
+              座席: <span id="assignedSeat"></span>
+            </div>
+          </div>
+
+          <div id="connectionStatus" class="connection-status">
+            <div class="status-dot"></div>
+            <span class="status-text">先生に接続中...</span>
+          </div>
+        </div>
+
+        <!-- 待機画面 -->
+        <div id="waitingArea" class="waiting-screen">
+          <div class="waiting-title">調理実習開始待ち</div>
+          <div class="waiting-description">
+            先生が調理実習を開始するまでお待ちください。<br />
+            開始されるとレシピが表示されます。
+          </div>
+        </div>
+
+        <!-- レシピ表示エリア -->
+        <div id="recipeContent" class="recipe-content" style="display: none">
+          <h2 class="recipe-title" id="currentRecipeTitle"></h2>
+
+          <div class="progress-display">
+            <div class="progress-text" id="progressText">進捗: 0%</div>
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                id="progressFill"
+                style="width: 0%"
+              ></div>
+            </div>
+          </div>
+
+          <div class="step-display" id="stepDisplay">
+            <!-- ステップ内容がここに動的に表示される -->
+          </div>
+
+          <div class="step-navigation">
+            <button id="prevStep" class="btn-step" disabled>
+              ⬅️ 前のステップ
+            </button>
+            <button id="nextStep" class="btn-step">次のステップ ➡️</button>
+          </div>
+
+          <button id="dangerButton" class="btn-danger">
+            ⚠️ 危険！先生を呼ぶ ⚠️
+          </button>
+        </div>
+
+        <button id="leaveRoom" class="btn-secondary">ルームを退出</button>
+      </div>
+    </div>
+
+    <script>
+      // レシピデータ（サーバーと同じデータ）
+      const SAMPLE_RECIPES = [
+        {
+          id: "recipe-1",
+          name: "オムライス",
+          description: "基本的なオムライスの作り方を学びます",
+          difficulty: "easy",
+          totalTime: 30,
+          servings: 2,
+          imageUrl:
+            "https://images.pexels.com/photos/8629139/pexels-photo-8629139.jpeg?auto=compress&cs=tinysrgb&w=400",
+          steps: [
+            {
+              stepNumber: 1,
+              title: "材料の下準備",
+              description: "鶏肉と玉ねぎを小さく切ります。",
+              duration: 5,
+              tips: ["鶏肉は1cm角程度に切ると火が通りやすいです"],
+              warnings: ["包丁の扱いに注意しましょう"],
+            },
+            {
+              stepNumber: 2,
+              title: "チキンライスを作る",
+              description:
+                "フライパンでバターを熱し、鶏肉と玉ねぎを炒めます。火が通ったらごはんとケチャップを加えて炒めます。",
+              duration: 8,
+              tips: ["ケチャップは焦げやすいので中火で炒めましょう"],
+              warnings: [
+                "油がはねる可能性があります。エプロンを着用してください",
+              ],
+            },
+            {
+              stepNumber: 3,
+              title: "卵を溶く",
+              description:
+                "ボウルに卵を割り入れ、塩コショウを加えて泡立て器でよく混ぜます。",
+              duration: 3,
+              tips: ["卵は均一に混ぜることが重要です"],
+            },
+            {
+              stepNumber: 4,
+              title: "薄焼き卵を作る",
+              description:
+                "小さいフライパンにバターを熱し、溶き卵を流し入れて薄焼き卵を作ります。",
+              duration: 5,
+              tips: ["弱火でゆっくり焼くと破れにくくなります"],
+              warnings: ["フライパンが熱いので火傷に注意"],
+            },
+            {
+              stepNumber: 5,
+              title: "オムライスを完成させる",
+              description:
+                "チキンライスをお皿に盛り、薄焼き卵を上にかぶせて形を整えます。",
+              duration: 3,
+              tips: ["卵が破れても大丈夫、美味しく食べられます！"],
+            },
+          ],
+          ingredients: [
+            "卵 4個",
+            "ごはん 2杯分",
+            "鶏肉 100g",
+            "玉ねぎ 1/2個",
+            "ケチャップ 大さじ4",
+            "バター 20g",
+            "塩コショウ 少々",
+          ],
+          tools: [
+            "フライパン（大・小）",
+            "ボウル",
+            "泡立て器",
+            "フライ返し",
+            "お皿",
+          ],
+        },
+        {
+          id: "recipe-2",
+          name: "野菜炒め",
+          description: "栄養バランス抜群の野菜炒めを作ります",
+          difficulty: "easy",
+          totalTime: 20,
+          servings: 2,
+          imageUrl:
+            "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400",
+          steps: [
+            {
+              stepNumber: 1,
+              title: "野菜をカットする",
+              description:
+                "キャベツは一口大に、人参は薄切り、ピーマンは細切りにします。",
+              duration: 8,
+              warnings: ["包丁の扱いに十分注意してください"],
+            },
+            {
+              stepNumber: 2,
+              title: "火の通りにくい野菜から炒める",
+              description: "フライパンに油を熱し、人参から炒め始めます。",
+              duration: 3,
+              tips: ["強火で一気に炒めると食感が良くなります"],
+              warnings: ["油がはねる可能性があります"],
+            },
+            {
+              stepNumber: 3,
+              title: "他の野菜を加える",
+              description: "ピーマン、キャベツ、もやしの順に加えて炒めます。",
+              duration: 5,
+              tips: ["野菜のシャキシャキ感を残すように炒めすぎないこと"],
+            },
+            {
+              stepNumber: 4,
+              title: "調味料で味付け",
+              description: "醤油、中華だしの素、塩コショウで味を整えます。",
+              duration: 2,
+              tips: ["味見をしながら調整しましょう"],
+            },
+          ],
+          ingredients: [
+            "キャベツ 150g",
+            "人参 1/2本",
+            "ピーマン 2個",
+            "もやし 100g",
+            "サラダ油 大さじ1",
+            "醤油 大さじ2",
+            "塩コショウ 少々",
+            "中華だしの素 小さじ1",
+          ],
+          tools: ["フライパン", "まな板", "包丁", "ボウル"],
+        },
+        {
+          id: "recipe-3",
+          name: "クッキー",
+          description: "サクサクのバタークッキーを作ります",
+          difficulty: "medium",
+          totalTime: 60,
+          servings: 20,
+          imageUrl:
+            "https://images.pexels.com/photos/230325/pexels-photo-230325.jpeg?auto=compress&cs=tinysrgb&w=400",
+          steps: [
+            {
+              stepNumber: 1,
+              title: "オーブンを予熱する",
+              description: "オーブンを170度に予熱します。",
+              duration: 10,
+              warnings: ["オーブンは高温になります。取り扱いに注意"],
+            },
+            {
+              stepNumber: 2,
+              title: "バターと砂糖を混ぜる",
+              description:
+                "室温に戻したバターと砂糖をボウルで白っぽくなるまで混ぜます。",
+              duration: 5,
+              tips: ["バターが硬い場合は少し温めてください"],
+            },
+            {
+              stepNumber: 3,
+              title: "卵とバニラエッセンスを加える",
+              description: "溶き卵とバニラエッセンスを加えて混ぜます。",
+              duration: 3,
+            },
+            {
+              stepNumber: 4,
+              title: "粉類を加える",
+              description: "ふるった薄力粉を加えて、さっくりと混ぜます。",
+              duration: 5,
+              tips: ["混ぜすぎると固くなるので注意"],
+              warnings: ["粉が舞い上がらないよう注意"],
+            },
+            {
+              stepNumber: 5,
+              title: "生地を成形する",
+              description: "生地を適当な大きさに分けて、天板に並べます。",
+              duration: 10,
+              tips: ["均一な大きさにすると焼き上がりが揃います"],
+            },
+            {
+              stepNumber: 6,
+              title: "オーブンで焼く",
+              description: "170度のオーブンで15-20分焼きます。",
+              duration: 20,
+              warnings: ["オーブンから取り出す際は火傷に注意"],
+            },
+          ],
+          ingredients: [
+            "薄力粉 200g",
+            "バター 100g",
+            "砂糖 80g",
+            "卵 1個",
+            "バニラエッセンス 数滴",
+          ],
+          tools: ["ボウル", "泡立て器", "オーブン", "クッキングシート", "天板"],
+        },
+      ];
+
+      // Socket.IO接続
+      const WEBSOCKET_URL = "/";
+      const token = sessionStorage.getItem("token");
+      const username = sessionStorage.getItem("username");
+
+      const socket = io(WEBSOCKET_URL, {
+        withCredentials: true,
+        transports: ["websocket"],
+        auth: {
+          token: token,
+        },
+      });
+
+      // グローバル変数
+      let currentRoom = null;
+      let selectedSeat = null;
+      let availableSeats = [];
+      let maxSeats = 0;
+      let isConnected = false;
+      let sessionActive = false;
+      let currentRecipe = null;
+      let currentStepIndex = 0;
+
+      // DOM要素
+      const loadingScreen = document.getElementById("loadingScreen");
+      const joinScreen = document.getElementById("joinScreen");
+      const recipeScreen = document.getElementById("recipeScreen");
+      const joinForm = document.getElementById("joinForm");
+      const roomNameInput = document.getElementById("roomName");
+      const seatGrid = document.getElementById("seatGrid");
+      const joinButton = document.getElementById("joinButton");
+      const connectionStatus = document.getElementById("connectionStatus");
+
+      // 初期化
+      socket.on("connect", () => {
+        console.log("Connected to WebSocket server");
+        document.body.classList.add("loaded");
+        loadingScreen.style.display = "none";
+        initializePage();
+      });
+
+      socket.on("connect_error", (err) => {
+        console.error("Connection error:", err);
+        window.location.href = "./login.html";
+      });
+
+      function initializePage() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomFromUrl = urlParams.get("room");
+
+        if (roomFromUrl) {
+          roomNameInput.value = decodeURIComponent(roomFromUrl);
+          requestRoomInfo(decodeURIComponent(roomFromUrl));
+        }
+
+        showJoinScreen();
+      }
+
+      // ルーム情報取得
+      function requestRoomInfo(roomName) {
+        socket.emit("getRoomInfo", { room: roomName });
+      }
+
+      // ルーム名入力時の処理
+      roomNameInput.addEventListener("blur", function () {
+        const roomName = roomNameInput.value.trim();
+        if (roomName) {
+          requestRoomInfo(roomName);
+        }
+      });
+
+      // 座席グリッド生成
+      function generateSeatGrid(maxSeats, occupiedSeats = []) {
+        availableSeats = [];
+        seatGrid.innerHTML = "";
+        maxSeats = maxSeats;
+
+        seatGrid.className = `seat-grid grid-${Math.min(maxSeats, 10)}`;
+
+        for (let i = 0; i < maxSeats; i++) {
+          const isOccupied = occupiedSeats.includes(i);
+          const seatButton = document.createElement("button");
+
+          seatButton.type = "button";
+          seatButton.className = `seat-button ${isOccupied ? "occupied" : ""}`;
+          seatButton.dataset.seatIndex = i;
+
+          seatButton.innerHTML = `
+            <div class="seat-number">座席 ${i + 1}</div>
+            <div class="seat-status">${isOccupied ? "使用中" : "空席"}</div>
+          `;
+
+          if (!isOccupied) {
+            availableSeats.push(i);
+            seatButton.addEventListener("click", () => selectSeat(i));
+          }
+
+          seatGrid.appendChild(seatButton);
+        }
+      }
+
+      // 座席選択
+      function selectSeat(seatIndex) {
+        document.querySelectorAll(".seat-button.selected").forEach((btn) => {
+          btn.classList.remove("selected");
+        });
+
+        const seatButton = document.querySelector(
+          `[data-seat-index="${seatIndex}"]`
+        );
+        if (seatButton && !seatButton.classList.contains("occupied")) {
+          seatButton.classList.add("selected");
+          selectedSeat = seatIndex;
+          joinButton.disabled = false;
+        }
+      }
+
+      // 画面表示関数
+      function showJoinScreen() {
+        joinScreen.style.display = "flex";
+        recipeScreen.style.display = "none";
+      }
+
+      function showRecipeScreen() {
+        joinScreen.style.display = "none";
+        recipeScreen.style.display = "flex";
+      }
+
+      // エラーメッセージ表示
+      function showError(message) {
+        const errorElement = document.getElementById("errorMessage");
+        errorElement.textContent = message;
+        errorElement.classList.add("show");
+        setTimeout(() => {
+          errorElement.classList.remove("show");
+        }, 5000);
+      }
+
+      // 接続状態更新
+      function updateConnectionStatus(connected) {
+        isConnected = connected;
+        const statusDot = connectionStatus.querySelector(".status-dot");
+        const statusText = connectionStatus.querySelector(".status-text");
+
+        if (connected) {
+          connectionStatus.classList.remove("disconnected");
+          statusDot.classList.remove("disconnected");
+          statusText.textContent = "先生に接続されました";
+        } else {
+          connectionStatus.classList.add("disconnected");
+          statusDot.classList.add("disconnected");
+          statusText.textContent = "接続が切断されました";
+        }
+      }
+
+      // レシピ表示関数
+      function displayRecipe(recipeId) {
+        currentRecipe = SAMPLE_RECIPES.find((r) => r.id === recipeId);
+        if (!currentRecipe) {
+          console.error("Recipe not found:", recipeId);
+          return;
+        }
+
+        document.getElementById("currentRecipeTitle").textContent =
+          currentRecipe.name;
+        currentStepIndex = 0;
+        updateStepDisplay();
+        updateProgress();
+
+        document.getElementById("waitingArea").style.display = "none";
+        document.getElementById("recipeContent").style.display = "block";
+      }
+
+      // ステップ表示更新
+      function updateStepDisplay() {
+        if (
+          !currentRecipe ||
+          currentStepIndex < 0 ||
+          currentStepIndex >= currentRecipe.steps.length
+        ) {
+          return;
+        }
+
+        const step = currentRecipe.steps[currentStepIndex];
+        const stepDisplay = document.getElementById("stepDisplay");
+
+        const tipsHtml =
+          step.tips && step.tips.length > 0
+            ? `
+          <div class="step-tips">
+            <div class="step-tips-title">💡 コツ・ポイント</div>
+            <ul>
+              ${step.tips.map((tip) => `<li>${tip}</li>`).join("")}
+            </ul>
+          </div>
+        `
+            : "";
+
+        const warningsHtml =
+          step.warnings && step.warnings.length > 0
+            ? `
+          <div class="step-warnings">
+            <div class="step-warnings-title">⚠️ 注意事項</div>
+            <ul>
+              ${step.warnings.map((warning) => `<li>${warning}</li>`).join("")}
+            </ul>
+          </div>
+        `
+            : "";
+
+        stepDisplay.innerHTML = `
+          <div class="step-header">
+            <div class="step-number">${step.stepNumber}</div>
+            <div class="step-info">
+              ${step.duration ? `予想時間: ${step.duration}分` : ""}
+            </div>
+          </div>
+          <div class="step-title">${step.title}</div>
+          <div class="step-description">${step.description}</div>
+          ${tipsHtml}
+          ${warningsHtml}
+        `;
+
+        // ナビゲーションボタンの状態更新
+        document.getElementById("prevStep").disabled = currentStepIndex === 0;
+        document.getElementById("nextStep").disabled =
+          currentStepIndex >= currentRecipe.steps.length - 1;
+
+        // 進捗をサーバーに送信
+        socket.emit("studentProgress", {
+          room: currentRoom,
+          userId: socket.id,
+          username: username,
+          seatIndex: selectedSeat,
+          currentStep: currentStepIndex + 1,
+          recipeId: currentRecipe.id,
+        });
+      }
+
+      // 進捗更新
+      function updateProgress() {
+        if (!currentRecipe) return;
+
+        const progressPercentage = Math.round(
+          ((currentStepIndex + 1) / currentRecipe.steps.length) * 100
+        );
+        document.getElementById("progressText").textContent = `進捗: ステップ ${
+          currentStepIndex + 1
+        }/${currentRecipe.steps.length} (${progressPercentage}%)`;
+        document.getElementById(
+          "progressFill"
+        ).style.width = `${progressPercentage}%`;
+      }
+
+      // ルーム参加
+      joinForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const room = roomNameInput.value.trim();
+
+        if (!room) {
+          showError("ルーム名を入力してください");
+          return;
+        }
+
+        if (selectedSeat === null) {
+          showError("座席を選択してください");
+          return;
+        }
+
+        currentRoom = room;
+
+        socket.emit("join", {
+          room: room,
+          role: "student",
+          username: username,
+          seatIndex: selectedSeat,
+        });
+      });
+
+      // ステップナビゲーション
+      document.getElementById("prevStep").addEventListener("click", () => {
+        if (currentStepIndex > 0) {
+          currentStepIndex--;
+          updateStepDisplay();
+          updateProgress();
+        }
+      });
+
+      document.getElementById("nextStep").addEventListener("click", () => {
+        if (
+          currentRecipe &&
+          currentStepIndex < currentRecipe.steps.length - 1
+        ) {
+          currentStepIndex++;
+          updateStepDisplay();
+          updateProgress();
+        }
+      });
+
+      // 危険ボタン
+      document.getElementById("dangerButton").addEventListener("click", () => {
+        if (currentRoom && isConnected) {
+          socket.emit("dangerAlert", {
+            room: currentRoom,
+            userId: socket.id,
+            username: username,
+            seatIndex: selectedSeat,
+            message: "危険な状況が発生しました",
+          });
+
+          // ボタンを一時的に無効化
+          const dangerBtn = document.getElementById("dangerButton");
+          const originalText = dangerBtn.innerHTML;
+          dangerBtn.innerHTML = "✅ 先生に通知しました";
+          dangerBtn.disabled = true;
+
+          setTimeout(() => {
+            dangerBtn.innerHTML = originalText;
+            dangerBtn.disabled = false;
+          }, 5000);
+        }
+      });
+
+      // ルーム退出
+      document
+        .getElementById("leaveRoom")
+        .addEventListener("click", function () {
+          if (currentRoom) {
+            socket.disconnect();
+            currentRoom = null;
+            selectedSeat = null;
+            currentRecipe = null;
+            sessionActive = false;
+            showJoinScreen();
+          }
+          socket.connect();
+        });
+
+      // Socket.IOイベントハンドラー
+      socket.on("roomInfo", function (data) {
+        console.log("Room info received:", data);
+        if (data.success) {
+          maxSeats = data.maxSeats;
+          generateSeatGrid(data.maxSeats, data.occupiedSeats || []);
+        } else {
+          showError(data.message || "ルーム情報の取得に失敗しました");
+        }
+      });
+
+      socket.on("message", function (data) {
+        console.log("Received message:", data);
+
+        if (data.type === "student_joined") {
+          document.getElementById("recipeRoomName").textContent = currentRoom;
+          document.getElementById("recipeStudentName").textContent = username;
+          document.getElementById("assignedSeat").textContent = `座席 ${
+            selectedSeat + 1
+          }`;
+          updateConnectionStatus(true);
+          showRecipeScreen();
+        } else if (data.type === "room_not_found") {
+          showError("指定されたルームが見つかりません");
+        } else if (data.type === "room_full") {
+          showError("ルームが満員です");
+        } else if (data.type === "seat_occupied") {
+          showError(
+            "選択した座席は既に使用されています。別の座席を選択してください"
+          );
+          requestRoomInfo(currentRoom);
+        }
+      });
+
+      socket.on("sessionStarted", function (data) {
+        console.log("Session started:", data);
+        sessionActive = true;
+
+        // 確認応答を送信
+        socket.emit("sessionResponse", {
+          room: currentRoom,
+          userId: socket.id,
+          type: "start_received",
+          status: "success",
+        });
+
+        displayRecipe(data.recipeId);
+      });
+
+      socket.on("sessionEnded", function (data) {
+        console.log("Session ended:", data);
+        sessionActive = false;
+
+        // 確認応答を送信
+        socket.emit("sessionResponse", {
+          room: currentRoom,
+          userId: socket.id,
+          type: "end_received",
+          status: "success",
+        });
+
+        // 待機画面に戻す
+        document.getElementById("waitingArea").style.display = "block";
+        document.getElementById("recipeContent").style.display = "none";
+        currentRecipe = null;
+        currentStepIndex = 0;
+      });
+
+      socket.on("seatUpdate", function (data) {
+        console.log("Seat update received:", data);
+        if (data.occupiedSeats) {
+          generateSeatGrid(maxSeats, data.occupiedSeats);
+          if (
+            selectedSeat !== null &&
+            data.occupiedSeats.includes(selectedSeat)
+          ) {
+            selectedSeat = null;
+            joinButton.disabled = true;
+          }
+        }
+      });
+
+      socket.on("disconnect", function () {
+        updateConnectionStatus(false);
+        sessionActive = false;
+        currentRecipe = null;
+        console.log("接続が切断されました");
+      });
+
+      socket.on("reconnect", function () {
+        if (currentRoom) {
+          socket.emit("join", {
+            room: currentRoom,
+            role: "student",
+            username: username,
+            seatIndex: selectedSeat,
+          });
+        }
+      });
+    </script>
+  </body>
+</html>

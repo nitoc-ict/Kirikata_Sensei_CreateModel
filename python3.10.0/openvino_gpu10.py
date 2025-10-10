@@ -1,0 +1,212 @@
+import gc
+import cv2
+import mediapipe as mp
+import numpy as np
+from ultralytics import YOLO
+
+# （カメラ設定、YOLOロードなどは変更なし）
+# ...
+input_length = 640
+model_path = "C:/Users/mi241326/idea/procon/createModel/python3.10.0/model/model1/best_openvino_model"
+device = "intel:gpu"
+task = "detect"
+detection_interval = 2 # 何フレーム事に推論を行うか
+confidence_threshold = 0.50 # 物体検出の信頼度が50%以上の時、検出成功とする
+
+DANGER_DISTANCE = 50 # 危険距離（ピクセル） 50
+MIN_EXTENDED_FINGERS = 2
+
+# ### 変更点：握りこぶし判定用のしきい値を追加 ###
+# この値は正規化座標系での距離。0.1〜0.2あたりで調整。
+FIST_THRESHOLD = 0.21
+
+# ### 変更点：健全性チェック用のしきい値を追加 ###
+# 指先-付け根間の距離が、第二関節-付け根間の距離のこの割合より短い場合、異常と見なす
+SANITY_CHECK_THRESHOLD = 0.8
+
+yolo_model = YOLO(model_path, task=task)
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.7)
+
+cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, input_length); cap.set(cv2.CAP_PROP_FRAME_HEIGHT, input_length)
+
+# ### 変更点：ここから新しい判定関数 ###
+
+def is_hand_a_fist(landmarks):
+    """手が握りこぶしかを判定する"""
+    wrist = landmarks.landmark[0]
+    
+    # 指先(tip)のランドマークID
+    tip_ids = [8, 12, 16]
+    
+    total_distance = 0
+    for tip_id in tip_ids:
+        tip = landmarks.landmark[tip_id]
+        # 各指先と手首の距離を計算
+        distance = np.hypot(tip.x - wrist.x, tip.y - wrist.y)
+        total_distance += distance
+        
+    # 指先と手首の平均距離を算出
+    avg_distance = total_distance / len(tip_ids)
+    
+    # 平均距離がしきい値より小さければ「握りこぶし」と判定
+    return avg_distance < FIST_THRESHOLD
+
+def is_finger_extended(landmarks, tip_id, pip_id, mcp_id):
+    """【角度判定版】関節の角度で指が伸びているか判定。"""
+    # --- 1. 角度による判定（従来通り） ---
+    tip = np.array([landmarks.landmark[tip_id].x, landmarks.landmark[tip_id].y])
+    pip = np.array([landmarks.landmark[pip_id].x, landmarks.landmark[pip_id].y])
+    mcp = np.array([landmarks.landmark[mcp_id].x, landmarks.landmark[mcp_id].y])
+    v_pip_mcp = mcp - pip
+    v_pip_tip = tip - pip
+    dot_product = np.dot(v_pip_mcp, v_pip_tip)
+    norm_product = np.linalg.norm(v_pip_mcp) * np.linalg.norm(v_pip_tip)
+    if norm_product == 0: return False
+    cos_theta = dot_product / norm_product
+
+    is_staright = cos_theta < -0.94
+
+    # 角度判定で伸びていないなら、その時点で終了
+    if not is_staright:
+        return False
+    
+     # --- 2. 健全性チェック (角度判定がTrueの場合のみ実行) ---
+    # 各関節間の距離を計算
+    dist_tip_mcp = np.linalg.norm(tip - mcp)
+    dist_pip_mcp = np.linalg.norm(pip - mcp)
+    # 健全性チェック：指先が付け根に近すぎる（＝隠れてワープしている）場合は異常と見なす
+    # 指が正常に伸びていれば、dist_tip_mcp は dist_pip_mcp より必ず長くなるはず
+    if dist_tip_mcp < dist_pip_mcp * SANITY_CHECK_THRESHOLD:
+        # 異常な位置関係なので、隠れていると判断しFalseを返す
+        return False
+        
+    # 全てのチェックをパスした場合のみ「伸びている」と判断
+    return True
+    
+
+
+def count_extended_fingers(hand_landmarks):
+    """伸びている指の数を、握りこぶし判定を優先してカウントする"""
+    # ### 変更点：最初に握りこぶしかどうかを判定 ###
+    if is_hand_a_fist(hand_landmarks):
+        # 握りこぶしなら、伸びている指は0本として処理を終了
+        return 0
+
+    # 握りこぶしでない場合のみ、角度で各指を判定
+    count = 0
+    finger_ids = [(8, 6, 5), (12, 10, 9), (16, 14, 13)]
+    for tip_id, pip_id, mcp_id in finger_ids:
+        if is_finger_extended(hand_landmarks, tip_id, pip_id, mcp_id):
+            count += 1
+    return count
+
+# （get_hand_centerなどのヘルパー関数は変更なし）
+# ...
+def get_hand_center(landmarks, width, height):
+    xs = [lm.x for lm in landmarks.landmark]; ys = [lm.y for lm in landmarks.landmark]
+    return int(np.mean(xs) * width), int(np.mean(ys) * height)
+def get_knife_center(box):
+    xmin, ymin, xmax, ymax = box; return (xmin + xmax) // 2, (ymin + ymax) // 2
+def calculate_distance(point1, point2):
+    return np.hypot(point1[0] - point2[0], point1[1] - point2[1])
+def draw_danger_warning(frame):
+    overlay = frame.copy(); cv2.rectangle(overlay, (0, 0), (frame.shape[1], frame.shape[0]), (0, 0, 255), -1)
+    cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
+    warning_text = "!! DANGER !!"; font = cv2.FONT_HERSHEY_TRIPLEX; font_scale = 2.5; thickness = 5
+    text_size, _ = cv2.getTextSize(warning_text, font, font_scale, thickness)
+    text_x = (frame.shape[1] - text_size[0]) // 2; text_y = (frame.shape[0] + text_size[1]) // 2
+    cv2.putText(frame, warning_text, (text_x, text_y), font, font_scale, (0, 0, 0), thickness + 3)
+    cv2.putText(frame, warning_text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness)
+
+# フレームループ
+frame_count = 0; yolo_results = None
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret: break
+
+    frame = cv2.flip(frame, 1)
+    frame_count += 1
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    img_h, img_w, _ = frame.shape
+    results = hands.process(img_rgb)
+
+    if frame_count % detection_interval == 0:
+        yolo_results = yolo_model(frame, device=device, conf=confidence_threshold)[0]
+
+    knife_boxes_scores = []
+    if yolo_results and hasattr(yolo_results, 'boxes') and len(yolo_results.boxes) > 0:
+        for box, cls, score in zip(yolo_results.boxes.xyxy, yolo_results.boxes.cls, yolo_results.boxes.conf):
+            if int(cls) == 0:
+                xmin, ymin, xmax, ymax = map(int, box)
+                knife_boxes_scores.append((score.item(), [xmin, ymin, xmax, ymax]))
+
+    left_hand_data, right_hand_data = None, None
+    if results and results.multi_hand_landmarks:
+        for hand_landmarks, handedness_obj in zip(results.multi_hand_landmarks, results.multi_handedness):
+            hand_label = handedness_obj.classification[0].label
+            cx, cy = get_hand_center(hand_landmarks, img_w, img_h)
+            extended_fingers = count_extended_fingers(hand_landmarks)
+            hand_info = {'center': (cx, cy), 'landmarks': hand_landmarks, 'extended_fingers': extended_fingers}
+            if hand_label == "Left": left_hand_data = hand_info
+            elif hand_label == "Right": right_hand_data = hand_info
+            mp.solutions.drawing_utils.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+    is_dangerous = False
+    danger_info = ""
+
+    if knife_boxes_scores and left_hand_data is not None:
+        knife_boxes_scores.sort(key=lambda x: x[0], reverse=True)
+        best_knife_score, best_knife_box = knife_boxes_scores[0]
+        knife_center = get_knife_center(best_knife_box)
+
+        if left_hand_data['extended_fingers'] >= MIN_EXTENDED_FINGERS:
+            landmarks = left_hand_data['landmarks']
+            finger_ids = [(8, 6, 5), (12, 10, 9), (16, 14, 13)]
+            for tip_id, pip_id, mcp_id in finger_ids:
+                if is_finger_extended(landmarks, tip_id, pip_id, mcp_id):
+                    tip_landmark = landmarks.landmark[tip_id]
+                    pip_landmark = landmarks.landmark[pip_id]
+                    mcp_landmark = landmarks.landmark[mcp_id]
+                    tip_pos = (int(tip_landmark.x * img_w), int(tip_landmark.y * img_h))
+                    pip_pos = (int(pip_landmark.x * img_w), int(pip_landmark.y * img_h))
+                    mcp_pos = (int(mcp_landmark.x * img_w), int(mcp_landmark.y * img_h))
+                    dist_tip_to_knife = calculate_distance(tip_pos, knife_center)
+                    dist_pip_to_knife = calculate_distance(pip_pos, knife_center)
+                    dist_mcp_to_knife = calculate_distance(mcp_pos, knife_center)
+
+                    # 一番距離が小さい指の距離を渡す
+                    nearest_dist_point_to_knife = min(dist_tip_to_knife, dist_pip_to_knife, dist_mcp_to_knife)
+                    if nearest_dist_point_to_knife < DANGER_DISTANCE:
+                        is_dangerous = True
+                        danger_info = f"Finger tip too close! Dist: {nearest_dist_point_to_knife:.0f}px"
+                        cv2.circle(frame, tip_pos, 15, (0, 0, 255), 3)
+                        break
+        
+        xmin, ymin, xmax, ymax = best_knife_box
+        color = (0, 0, 255) if is_dangerous else (0, 255, 0)
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 3)
+        cv2.putText(frame, f'Knife: {best_knife_score:.2f}', (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+
+    if is_dangerous:
+        draw_danger_warning(frame)
+        if danger_info: cv2.putText(frame, danger_info, (10, img_h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+    if left_hand_data:
+        info_text = f"Left Hand: {left_hand_data['extended_fingers']}/3 fingers extended"
+        cv2.putText(frame, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+    if right_hand_data:
+        info_text = f"Right Hand: {right_hand_data['extended_fingers']}/3 fingers extended (Holding)"
+        cv2.putText(frame, info_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+    if results: del results
+    gc.collect()
+
+    cv2.imshow("Knife Safety Detection System", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'): break
+
+cap.release()
+cv2.destroyAllWindows()
+hands.close()
