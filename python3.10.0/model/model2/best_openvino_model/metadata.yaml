@@ -1,0 +1,22 @@
+description: Ultralytics YOLO11s model trained on /content/drive/MyDrive/procon/procon2025/model/data2_knife.yaml
+author: Ultralytics
+date: '2025-10-07T20:26:57.699691'
+version: 8.3.205
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 768
+- 768
+names:
+  0: knife
+args:
+  batch: 1
+  fraction: 1.0
+  half: false
+  int8: false
+  dynamic: false
+  nms: false
+channels: 3
